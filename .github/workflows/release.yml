@@ -1,0 +1,62 @@
+# Stabiles Release: Tag `v1.2.3` pushen → DMG bauen, signieren, notarisieren,
+# GitHub Release mit automatisch erzeugten Release Notes anlegen.
+#
+#   git tag v0.1.0 && git push origin v0.1.0
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - id: v
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: version
+    uses: ./.github/workflows/build-dmg.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+      dmg-name: ZIPP-${{ needs.version.outputs.version }}.dmg
+      cli-name: zipp-cli-${{ needs.version.outputs.version }}-macos.tar.gz
+    secrets: inherit
+
+  publish:
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: zipp-dmg
+      - name: GitHub Release anlegen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "ZIPP-$VERSION.dmg" "ZIPP-$VERSION.dmg.sha256" \
+            "zipp-cli-$VERSION-macos.tar.gz" "zipp-cli-$VERSION-macos.tar.gz.sha256" \
+            --title "ZIPP $VERSION" \
+            --generate-notes \
+            --verify-tag
+      - name: Homebrew-Cask ausgeben
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          SHA=$(cut -d' ' -f1 "ZIPP-$VERSION.dmg.sha256")
+          {
+            echo "### Homebrew-Cask"
+            echo "In \`packaging/homebrew/zipp.rb\` eintragen (bzw. im Tap aktualisieren):"
+            echo '```ruby'
+            echo "version \"$VERSION\""
+            echo "sha256 \"$SHA\""
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

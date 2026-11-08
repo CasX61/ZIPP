@@ -1,0 +1,4 @@
+[bindings.swift]
+# Name des C-Moduls, das der generierte Swift-Code importiert
+ffi_module_name = "ZippCoreFFI"
+ffi_module_filename = "ZippCoreFFI"

@@ -1,0 +1,50 @@
+# Wöchentliches Fuzzing der Format-Parser (ZIP, 7z, RAR, TAR …).
+# Findet es einen Absturz, wird das auslösende Archiv als Artefakt hochgeladen
+# und ein Issue angelegt.
+name: Fuzzing
+
+on:
+  schedule:
+    - cron: "17 3 * * 1" # montags 03:17 UTC
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: "Laufzeit in Sekunden"
+        default: "1200"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  fuzz:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core/fuzz -> target
+      - name: cargo-fuzz installieren
+        run: cargo install cargo-fuzz --locked
+      - name: Startkorpus aus den Test-Archiven
+        run: |
+          mkdir -p core/fuzz/corpus/archive
+          cp core/zipp-core/tests/fixtures/*.rar core/fuzz/corpus/archive/
+      - name: Fuzzen
+        working-directory: core/fuzz
+        run: cargo +nightly fuzz run archive -- -max_total_time=${{ inputs.seconds || '1200' }} -max_len=262144
+      - name: Absturz-Archiv hochladen
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-absturz
+          path: core/fuzz/artifacts/
+      - name: Issue anlegen
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh issue create --title "Fuzzing hat einen Absturz gefunden" --label bug \
+            --body "Lauf: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} – das auslösende Archiv liegt im Artefakt „fuzz-absturz“."

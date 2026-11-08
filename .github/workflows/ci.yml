@@ -1,0 +1,61 @@
+# Prüft jeden Push und jeden Pull Request: Formatierung, Clippy, Rust- und Swift-Tests.
+# Läuft ohne Secrets (auch für Pull Requests aus Forks).
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+    tags-ignore: ["v*"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: Rust-Kern
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core -> target
+      - name: Formatierung
+        run: cargo fmt --all --check
+        working-directory: core
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+        working-directory: core
+      - name: Tests
+        run: cargo test --workspace
+        working-directory: core
+
+  app:
+    name: macOS-App
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core -> target
+      - name: XcodeGen installieren
+        run: brew install xcodegen
+      - name: Bauen und testen
+        run: |
+          ZIPP_NATIVE_ONLY=1 scripts/build-core.sh debug
+          make project
+          xcodebuild -project app/Zipp.xcodeproj -scheme Zipp -configuration Debug \
+            -derivedDataPath build/DerivedData test

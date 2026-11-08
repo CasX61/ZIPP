@@ -1,0 +1,15 @@
+[package]
+name = "zipp-cli"
+description = "ZIPP auf der Kommandozeile: Archive auflisten, entpacken, testen, erstellen, konvertieren"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "zipp"
+path = "src/main.rs"
+
+[dependencies]
+zipp-core = { path = "../zipp-core" }

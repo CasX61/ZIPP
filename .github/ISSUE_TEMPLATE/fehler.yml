@@ -1,0 +1,28 @@
+name: Fehler melden
+description: Etwas funktioniert nicht wie erwartet
+labels: [bug]
+body:
+  - type: textarea
+    id: was
+    attributes:
+      label: Was ist passiert?
+      description: Was hast du getan, was ist passiert, was hättest du erwartet?
+    validations:
+      required: true
+  - type: input
+    id: format
+    attributes:
+      label: Archivformat
+      placeholder: z. B. ZIP aus Windows, RAR5 mit Passwort, tar.zst
+  - type: input
+    id: version
+    attributes:
+      label: ZIPP-Version und macOS-Version
+      placeholder: z. B. ZIPP 0.1.0 (12), macOS 26.1, Apple Silicon
+    validations:
+      required: true
+  - type: markdown
+    attributes:
+      value: |
+        Kannst du ein Beispielarchiv anhängen? Bitte nur, wenn es keine privaten Daten enthält.
+        **Sicherheitslücken bitte nicht hier melden**, sondern wie in SECURITY.md beschrieben.

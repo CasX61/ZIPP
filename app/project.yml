@@ -1,0 +1,244 @@
+# Xcode-Projekt für ZIPP – erzeugt mit XcodeGen (https://github.com/yonaskolb/XcodeGen).
+# Nicht das .xcodeproj von Hand ändern, sondern diese Datei und dann `make project`.
+name: Zipp
+
+options:
+  bundleIdPrefix: app.zipp
+  deploymentTarget:
+    macOS: "14.0"
+  developmentLanguage: de
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    SWIFT_VERSION: "6.0"
+    # Lokal ad-hoc signieren; die CI signiert mit Developer ID (siehe scripts/release.sh)
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGN_STYLE: Manual
+    DEVELOPMENT_TEAM: ""
+    ENABLE_HARDENED_RUNTIME: YES
+    DEAD_CODE_STRIPPING: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    LOCALIZATION_PREFERS_STRING_CATALOGS: YES
+
+aggregateTargets:
+  # Baut den Rust-Kern und erzeugt Swift-Bindings + ZippCoreFFI.xcframework
+  RustCore:
+    buildScripts:
+      - name: Rust-Kern bauen
+        basedOnDependencyAnalysis: false
+        script: |
+          set -e
+          if [ "$CONFIGURATION" = "Release" ]; then
+            "$SRCROOT/../scripts/build-core.sh" release
+          else
+            ZIPP_NATIVE_ONLY=1 "$SRCROOT/../scripts/build-core.sh" debug
+          fi
+
+targets:
+  # Rust-Kern + generierte Swift-Bindings (Swift-5-Modus, da generierter Code)
+  # Statisch gelinkt: keine eingebettete Bibliothek, die mit Hardened Runtime
+  # und Ad-hoc-Signatur an der Library Validation scheitern könnte.
+  ZippCore:
+    type: framework.static
+    platform: macOS
+    sources:
+      - path: ZippCore/Generated/zipp_ffi.swift
+    dependencies:
+      # Muss vollständig fertig sein, bevor Xcode das xcframework verarbeitet
+      - target: RustCore
+      - framework: ZippCore/Generated/ZippCoreFFI.xcframework
+        embed: false
+    settings:
+      base:
+        PRODUCT_NAME: ZippCore
+        PRODUCT_BUNDLE_IDENTIFIER: app.zipp.ZippCore
+        SWIFT_VERSION: "5.0"
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+        SKIP_INSTALL: YES
+        SWIFT_SUPPRESS_WARNINGS: YES
+
+  Zipp:
+    type: application
+    platform: macOS
+    sources:
+      - path: Zipp
+      # Lizenz von UnRAR muss mit ausgeliefert werden
+      - path: ../third_party/unrar/license.txt
+        buildPhase: resources
+    dependencies:
+      - target: ZippCore
+        embed: false
+        link: true
+    info:
+      path: Zipp/Info.plist
+      properties:
+        CFBundleName: ZIPP
+        CFBundleDisplayName: ZIPP
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDevelopmentRegion: de
+        LSApplicationCategoryType: public.app-category.utilities
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        NSHumanReadableCopyright: "Kostenlos und Open Source (MIT/Apache-2.0)"
+        NSPrincipalClass: NSApplication
+        NSSupportsAutomaticTermination: false
+        NSSupportsSuddenTermination: false
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Archiv
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Default
+            LSItemContentTypes:
+              - public.zip-archive
+              - com.pkware.zip-archive
+              - org.7-zip.7-zip-archive
+              - com.rarlab.rar-archive
+              - public.tar-archive
+              - org.gnu.gnu-tar-archive
+              - org.gnu.gnu-zip-archive
+              - org.gnu.gnu-zip-tar-archive
+              - public.bzip2-archive
+              - public.tar-bzip2-archive
+              - org.tukaani.xz-archive
+              - org.tukaani.tar-xz-archive
+              - app.zipp.zstd-archive
+              - app.zipp.tar-zstd-archive
+              - app.zipp.split-archive
+        # Finder-Kontextmenü (Rechtsklick → Dienste). `NSRequiredContext: {}` sorgt
+        # dafür, dass die Einträge ohne Umweg über die Systemeinstellungen erscheinen.
+        NSServices:
+          - NSMenuItem: { default: "Mit ZIPP hier entpacken" }
+            NSMessage: extractHere
+            NSPortName: ZIPP
+            NSRequiredContext: {}
+            NSSendFileTypes:
+              - public.archive
+              - public.zip-archive
+              - org.7-zip.7-zip-archive
+              - com.rarlab.rar-archive
+              - public.tar-archive
+              - org.gnu.gnu-zip-archive
+              - org.gnu.gnu-zip-tar-archive
+              - public.bzip2-archive
+              - org.tukaani.xz-archive
+              - app.zipp.zstd-archive
+              - app.zipp.split-archive
+          - NSMenuItem: { default: "Mit ZIPP in eigenen Ordner entpacken" }
+            NSMessage: extractToFolder
+            NSPortName: ZIPP
+            NSRequiredContext: {}
+            NSSendFileTypes:
+              - public.archive
+              - public.zip-archive
+              - org.7-zip.7-zip-archive
+              - com.rarlab.rar-archive
+              - public.tar-archive
+              - org.gnu.gnu-zip-archive
+              - org.gnu.gnu-zip-tar-archive
+              - public.bzip2-archive
+              - org.tukaani.xz-archive
+              - app.zipp.zstd-archive
+              - app.zipp.split-archive
+          - NSMenuItem: { default: "Mit ZIPP als ZIP komprimieren" }
+            NSMessage: compressZip
+            NSPortName: ZIPP
+            NSRequiredContext: {}
+            NSSendFileTypes: [public.item]
+          - NSMenuItem: { default: "Mit ZIPP als 7z komprimieren" }
+            NSMessage: compress7z
+            NSPortName: ZIPP
+            NSRequiredContext: {}
+            NSSendFileTypes: [public.item]
+          - NSMenuItem: { default: "Mit ZIPP komprimieren …" }
+            NSMessage: compressDialog
+            NSPortName: ZIPP
+            NSRequiredContext: {}
+            NSSendFileTypes: [public.item]
+        UTImportedTypeDeclarations:
+          - UTTypeIdentifier: org.7-zip.7-zip-archive
+            UTTypeDescription: 7-Zip-Archiv
+            UTTypeConformsTo: [public.data, public.archive]
+            UTTypeTagSpecification:
+              public.filename-extension: [7z]
+              public.mime-type: [application/x-7z-compressed]
+          - UTTypeIdentifier: com.rarlab.rar-archive
+            UTTypeDescription: RAR-Archiv
+            UTTypeConformsTo: [public.data, public.archive]
+            UTTypeTagSpecification:
+              public.filename-extension: [rar]
+              public.mime-type: [application/vnd.rar, application/x-rar-compressed]
+          - UTTypeIdentifier: org.tukaani.xz-archive
+            UTTypeDescription: XZ-Archiv
+            UTTypeConformsTo: [public.data, public.archive]
+            UTTypeTagSpecification:
+              public.filename-extension: [xz]
+          - UTTypeIdentifier: org.tukaani.tar-xz-archive
+            UTTypeDescription: TAR-XZ-Archiv
+            UTTypeConformsTo: [public.data, public.archive]
+            UTTypeTagSpecification:
+              public.filename-extension: [txz]
+          - UTTypeIdentifier: org.gnu.gnu-zip-tar-archive
+            UTTypeDescription: TAR-GZ-Archiv
+            UTTypeConformsTo: [public.data, public.archive]
+            UTTypeTagSpecification:
+              public.filename-extension: [tgz]
+          - UTTypeIdentifier: app.zipp.zstd-archive
+            UTTypeDescription: Zstandard-Archiv
+            UTTypeConformsTo: [public.data, public.archive]
+            UTTypeTagSpecification:
+              public.filename-extension: [zst, zstd]
+          - UTTypeIdentifier: app.zipp.tar-zstd-archive
+            UTTypeDescription: TAR-Zstandard-Archiv
+            UTTypeConformsTo: [public.data, public.archive]
+            UTTypeTagSpecification:
+              public.filename-extension: [tzst]
+          # Erster Teil eines aufgeteilten Archivs (z. B. „Fotos.7z.001“ von 7-Zip oder ZIPP)
+          - UTTypeIdentifier: app.zipp.split-archive
+            UTTypeDescription: Teil eines aufgeteilten Archivs
+            UTTypeConformsTo: [public.data, public.archive]
+            UTTypeTagSpecification:
+              public.filename-extension: ["001"]
+    settings:
+      base:
+        PRODUCT_NAME: ZIPP
+        PRODUCT_MODULE_NAME: Zipp
+        PRODUCT_BUNDLE_IDENTIFIER: app.zipp.ZIPP
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # UnRAR (im Rust-Kern) ist C++
+        OTHER_LDFLAGS: "-lc++"
+        COMBINE_HIDPI_IMAGES: YES
+
+  ZippTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: ZippTests
+    dependencies:
+      - target: Zipp
+      - target: ZippCore
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: app.zipp.ZippTests
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/ZIPP.app/Contents/MacOS/ZIPP"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+
+schemes:
+  Zipp:
+    build:
+      targets:
+        Zipp: all
+        ZippTests: [test]
+    test:
+      targets:
+        - ZippTests
+      gatherCoverageData: false
+    run:
+      config: Debug
+    archive:
+      config: Release
