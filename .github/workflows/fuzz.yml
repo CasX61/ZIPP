@@ -36,7 +36,7 @@ jobs:
         run: cargo +nightly fuzz run archive -- -max_total_time=${{ inputs.seconds || '1200' }} -max_len=262144
       - name: Absturz-Archiv hochladen
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: fuzz-absturz
           path: core/fuzz/artifacts/
