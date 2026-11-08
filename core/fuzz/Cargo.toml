@@ -1,0 +1,31 @@
+# Fuzzing der Format-Parser mit cargo-fuzz (braucht Rust nightly):
+#
+#   cargo install cargo-fuzz
+#   cd core/fuzz && cargo +nightly fuzz run archive
+[package]
+name = "zipp-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+tempfile = "3"
+zipp-core = { path = "../zipp-core" }
+
+[[bin]]
+name = "archive"
+path = "fuzz_targets/archive.rs"
+test = false
+doc = false
+bench = false
+
+# Eigener Workspace: gehört nicht zum normalen Build
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1

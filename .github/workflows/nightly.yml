@@ -1,0 +1,43 @@
+# Jeder Commit auf main erzeugt ein DMG und veröffentlicht es als
+# Pre-Release „Nightly“ (wird bei jedem Commit ersetzt).
+name: Nightly
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: nightly
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    uses: ./.github/workflows/build-dmg.yml
+    with:
+      dmg-name: ZIPP-nightly.dmg
+      cli-name: zipp-cli-nightly-macos.tar.gz
+    secrets: inherit
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: zipp-dmg
+      - name: Pre-Release „nightly“ ersetzen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release delete nightly --yes --cleanup-tag || true
+          gh release create nightly ZIPP-nightly.dmg ZIPP-nightly.dmg.sha256 \
+            zipp-cli-nightly-macos.tar.gz zipp-cli-nightly-macos.tar.gz.sha256 \
+            --target "${{ github.sha }}" \
+            --prerelease \
+            --title "Nightly ($(echo '${{ github.sha }}' | cut -c1-7))" \
+            --notes "Automatischer Build aus \`main\` (${{ github.sha }}). Nicht für den Alltag gedacht – stabile Versionen findest du unter „Releases“."

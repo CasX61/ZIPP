@@ -1,0 +1,22 @@
+[workspace]
+resolver = "3"
+members = ["uniffi-bindgen", "zipp-cli", "zipp-core", "zipp-ffi"]
+# Fuzzing hat einen eigenen Workspace (braucht nightly), siehe fuzz/Cargo.toml
+exclude = ["fuzz"]
+
+[workspace.package]
+version = "1.0.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/CasX61/zipp"
+rust-version = "1.93"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"
+
+# Abhängigkeiten (zstd, unrar, lzma …) auch im Debug-Build optimieren,
+# sonst ist Entpacken beim Entwickeln unnötig langsam.
+[profile.dev.package."*"]
+opt-level = 2

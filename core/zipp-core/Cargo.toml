@@ -1,0 +1,30 @@
+[package]
+name = "zipp-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+bzip2 = "0.6.1"
+chardetng = "1.0.0"
+encoding_rs = "0.8.44"
+filetime = "0.2.29"
+flate2 = "1.1.11"
+libc = "0.2.191"
+liblzma = "0.4.9"
+sevenz-rust2 = { version = "0.25", features = ["aes256", "compress"] }
+tar = "0.4.46"
+thiserror = "2.0.21"
+unrar = "0.5.8"
+walkdir = "2.5.0"
+xattr = "1.7.0"
+zip = { version = "9", default-features = false, features = ["aes-crypto", "deflate", "deflate64", "bzip2", "lzma", "zstd", "time"] }
+zstd = "0.14.3"
+
+[dev-dependencies]
+flate2 = "1.1.11"
+tempfile = "3.27.0"
+xattr = "1.7.0"
+zip = { version = "9", default-features = false, features = ["aes-crypto", "deflate"] }

@@ -1,0 +1,42 @@
+# Build
+/build/
+/core/target/
+/app/ZippCore/Generated/
+# Wird aus app/project.yml erzeugt (make project)
+/app/*.xcodeproj/
+*.dmg
+
+# Fuzzing (cargo fuzz)
+/core/fuzz/target/
+/core/fuzz/corpus/
+/core/fuzz/artifacts/
+/core/fuzz/coverage/
+
+# Interne Planungs- und Entwurfsdateien (nur lokal)
+/PLAN.md
+/design.html
+/icon.png
+
+# Xcode
+xcuserdata/
+*.xcuserstate
+DerivedData/
+
+# Editoren & Werkzeuge
+.vscode/
+.idea/
+.claude/
+*.swp
+*~
+
+# macOS
+.DS_Store
+._*
+
+# Signatur & Geheimnisse
+*.p8
+*.p12
+*.cer
+*.mobileprovision
+.env
+.env.*
