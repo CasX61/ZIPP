@@ -3,6 +3,13 @@
 Alle wichtigen Änderungen an ZIPP. Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## [1.0.1] – 2026-11-09
+
+### Behoben
+- Build auf GitHub Actions: xz wird jetzt immer statisch eingebaut. Zuvor schlug das Linken der App mit
+  `Undefined symbol: _lzma_code` fehl, weil auf den Runnern ein System-xz erkannt wurde. Dadurch entstanden
+  weder Nightly- noch Release-Builds. Die Version 1.0.0 wurde nie veröffentlicht.
+
 ## [1.0.0] – 2026-11-08
 
 ### Neu

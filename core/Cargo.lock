@@ -1181,7 +1181,7 @@ dependencies = [
 
 [[package]]
 name = "uniffi-bindgen"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "uniffi",
 ]
@@ -1499,14 +1499,14 @@ dependencies = [
 
 [[package]]
 name = "zipp-cli"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "zipp-core",
 ]
 
 [[package]]
 name = "zipp-core"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "bzip2",
  "chardetng",
@@ -1528,7 +1528,7 @@ dependencies = [
 
 [[package]]
 name = "zipp-ffi"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "thiserror",
  "uniffi",
