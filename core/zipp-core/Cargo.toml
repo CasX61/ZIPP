@@ -13,7 +13,9 @@ encoding_rs = "0.8.44"
 filetime = "0.2.29"
 flate2 = "1.1.11"
 libc = "0.2.191"
-liblzma = "0.4.9"
+# "static": xz immer aus dem Quellcode einbauen. Ohne das nutzt liblzma-sys ein per pkg-config
+# gefundenes System-xz (z. B. auf CI-Runnern), und die von Xcode gelinkte Bibliothek hat dann keine lzma-Symbole.
+liblzma = { version = "0.4.9", features = ["static"] }
 sevenz-rust2 = { version = "0.25", features = ["aes256", "compress"] }
 tar = "0.4.46"
 thiserror = "2.0.21"
