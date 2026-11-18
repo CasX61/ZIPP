@@ -3,7 +3,7 @@
 Alle wichtigen Änderungen an ZIPP. Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/).
 
-## [Unreleased]
+## [1.1.0] – 2026-11-18
 
 ### Neu
 - Fortschrittsfenster beim Herausziehen in den Finder: Dauert das Entpacken länger als einen Augenblick,
