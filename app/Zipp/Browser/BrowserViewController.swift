@@ -366,7 +366,17 @@ extension BrowserViewController: NSTableViewDataSource {
             Task { await session.requestPassword() }
             return nil
         }
-        return promiseDelegate.makeProvider(for: node)
+        return promiseDelegate.makeProvider(for: node, window: tableView.window)
+    }
+
+    /// Alle gezogenen Zeilen sind abgefragt: Sie bilden zusammen einen Drag (ein Fortschrittsfenster).
+    func tableView(
+        _ tableView: NSTableView,
+        draggingSession session: NSDraggingSession,
+        willBeginAt screenPoint: NSPoint,
+        forRowIndexes rowIndexes: IndexSet
+    ) {
+        promiseDelegate.sealBatch()
     }
 
     /// Drop von Dateien zum Hinzufügen

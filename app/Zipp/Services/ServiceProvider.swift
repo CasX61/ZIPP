@@ -81,6 +81,8 @@ final class ServiceProvider: NSObject {
                     controller.ui.presentMessage("„\(session.displayName)“ kann nicht geöffnet werden", message)
                 case .loading, .locked:
                     break // Passwortabfrage abgebrochen
+                case .missing:
+                    break // Dienste beobachten die Datei nicht
                 }
                 session.cleanup()
             }

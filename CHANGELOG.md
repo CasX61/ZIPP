@@ -3,6 +3,17 @@
 Alle wichtigen Änderungen an ZIPP. Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## [Unreleased]
+
+### Neu
+- Fortschrittsfenster beim Herausziehen in den Finder: Dauert das Entpacken länger als einen Augenblick,
+  erscheint ein kleines schwebendes Fenster mit Balken, Geschwindigkeit, Restzeit und Abbrechen-Knopf.
+  Mehrere gezogene Dateien teilen sich einen gemeinsamen Balken.
+- Das Archivfenster beobachtet die geöffnete Datei: Wird sie im Finder umbenannt oder verschoben, geht
+  das Fenster mit. Wird sie gelöscht oder in den Papierkorb gelegt, zeigt es „Das Archiv ist nicht mehr
+  vorhanden“ (und das Archiv wieder, wenn es zurückgelegt wird). Ändert ein anderes Programm die Datei,
+  wird der Inhalt neu gelesen.
+
 ## [1.0.1] – 2026-11-09
 
 ### Behoben

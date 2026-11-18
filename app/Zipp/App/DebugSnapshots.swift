@@ -19,6 +19,8 @@ import AppKit
 ///   settings – Einstellungen zeigen
 ///   dark / light – Erscheinungsbild für diesen Lauf (wird nicht gespeichert)
 ///   service  – Dienst „In eigenen Ordner entpacken“ für das Archiv ausführen
+///   dragout  – größten Eintrag wie beim Ziehen in den Finder nach ZIPP_SNAPSHOT_DIR/drag schreiben
+///   trasharchive / deletearchive – Archiv von außen in den Papierkorb legen bzw. löschen
 ///   welcome  – neues Willkommen-Fenster
 ///   quit     – App beenden
 @MainActor
@@ -113,6 +115,24 @@ enum DebugSnapshots {
             if let url = controller.archiveURL {
                 AppDelegate.shared?.services.extract([url], mode: .always)
             }
+        case "dragout":
+            if let session = controller.session, let dir = ProcessInfo.processInfo.environment["ZIPP_SNAPSHOT_DIR"],
+               let node = session.currentFolder?.children.max(by: { $0.totalSize < $1.totalSize }) {
+                let target = URL(fileURLWithPath: dir).appendingPathComponent("drag")
+                try? FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
+                let delegate = FilePromiseDelegate(session: session)
+                let provider = delegate.makeProvider(for: node, window: controller.window)
+                delegate.sealBatch()
+                DispatchQueue.global().async {
+                    delegate.filePromiseProvider(provider, writePromiseTo: target.appendingPathComponent(node.name)) { _ in
+                        _ = delegate // bis zum Ende festhalten
+                    }
+                }
+            }
+        case "trasharchive":
+            if let url = controller.archiveURL { try? FileManager.default.trashItem(at: url, resultingItemURL: nil) }
+        case "deletearchive":
+            if let url = controller.archiveURL { try? FileManager.default.removeItem(at: url) }
         case "welcome":
             AppDelegate.shared?.newWelcomeWindow()
         case "quit":
@@ -124,6 +144,8 @@ enum DebugSnapshots {
 
     private static func snapshot(to dir: String, name: String) {
         var windows = NSApp.orderedWindows.filter { $0.isVisible && $0.contentView != nil }
+        // Schwebende Fenster (Fortschritt beim Herausziehen) fehlen in `orderedWindows`
+        windows += NSApp.windows.filter { $0 is NSPanel && $0.isVisible && !windows.contains($0) }
         windows += windows.compactMap(\.attachedSheet)
         for (i, window) in windows.enumerated() {
             guard let view = window.contentView?.superview ?? window.contentView,

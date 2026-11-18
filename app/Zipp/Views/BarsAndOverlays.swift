@@ -250,6 +250,18 @@ struct SessionStateView: View {
                 } actions: {
                     Button("Erneut versuchen") { Task { await session.load() } }
                 }
+            case .missing(let trashed):
+                ContentUnavailableView {
+                    Label("Das Archiv ist nicht mehr vorhanden", systemImage: trashed ? "trash" : "questionmark.folder")
+                } description: {
+                    Text(trashed
+                        ? "„\(session.displayName)“ wurde in den Papierkorb gelegt. Wird es zurückgelegt, zeigt ZIPP es wieder an."
+                        : "„\(session.displayName)“ wurde gelöscht, verschoben oder das Laufwerk ist nicht mehr verbunden.")
+                } actions: {
+                    Button("Fenster schließen") { session.ui.closeWindow?() }
+                        .buttonStyle(.borderedProminent)
+                        .keyboardShortcut(.defaultAction)
+                }
             }
         }
         .allowsHitTesting(session.phase != .ready)

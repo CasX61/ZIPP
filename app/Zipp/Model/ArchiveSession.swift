@@ -22,9 +22,12 @@ final class ArchiveSession {
         case locked(wrongPassword: Bool)
         case ready
         case failed(String)
+        /// Die Datei wurde gelöscht, in den Papierkorb gelegt oder das Volume ausgeworfen.
+        case missing(trashed: Bool)
     }
 
-    let url: URL
+    /// Folgt der Datei, wenn sie im Finder umbenannt oder verschoben wird.
+    private(set) var url: URL
     let ui: WindowState
 
     private(set) var phase: Phase = .loading
@@ -47,6 +50,11 @@ final class ArchiveSession {
     @ObservationIgnored private var tempDirectories: [URL] = []
     /// Die gespeicherte Passwort-Liste wird pro Archiv nur einmal durchprobiert.
     @ObservationIgnored private var triedPasswordList = false
+    /// Nur in Archivfenstern: Löschen, Verschieben und Ändern von außen bemerken.
+    @ObservationIgnored private var watchesFile = false
+    @ObservationIgnored private var watcher: FileWatcher?
+    /// Solange ZIPP selbst das Archiv neu schreibt, sind Änderungen kein Ereignis von außen.
+    @ObservationIgnored private var ownWrites = 0
     private(set) var historyVersion = 0
 
     init(url: URL, ui: WindowState) {
@@ -72,6 +80,7 @@ final class ArchiveSession {
     /// Liest das Inhaltsverzeichnis. Fragt bei Bedarf nach dem Passwort.
     func load() async {
         if root == nil { phase = .loading }
+        if watcher == nil, ownWrites == 0 { startWatching() }
         var candidate = password ?? PasswordStore.load(for: url)
         var fromKeychain = password == nil && candidate != nil
         var wrong = false
@@ -327,12 +336,7 @@ final class ArchiveSession {
             }
             if request.trashArchiveAfter {
                 // Bei mehrteiligen Archiven alle Teile
-                let volumes = archiveVolumes(path: url.path).map { URL(fileURLWithPath: $0) }
-                NSWorkspace.shared.recycle(volumes) { [ui] _, error in
-                    Task { @MainActor in
-                        if let error { ui.presentError(error) } else { ui.closeWindow?() }
-                    }
-                }
+                trashArchiveAndClose()
             }
             return destination
         } catch {
@@ -450,14 +454,16 @@ final class ArchiveSession {
         let encrypted = listing.hasEncryptedEntries
         let title = editTitle("Füge \(Fmt.objects(urls.count)) hinzu")
         do {
-            _ = try await withPassword { pw in
-                let addPassword = encrypted ? pw : nil
-                return try await ui.runJob(title: title, symbol: "plus") { relay in
-                    try addToArchive(
-                        path: path, sources: sources, innerDir: inner,
-                        options: AddOptions(level: level, password: addPassword, excludeMacMetadata: exclude),
-                        progress: relay
-                    )
+            _ = try await modifying {
+                try await withPassword { pw in
+                    let addPassword = encrypted ? pw : nil
+                    return try await ui.runJob(title: title, symbol: "plus") { relay in
+                        try addToArchive(
+                            path: path, sources: sources, innerDir: inner,
+                            options: AddOptions(level: level, password: addPassword, excludeMacMetadata: exclude),
+                            progress: relay
+                        )
+                    }
                 }
             }
             let firstName = urls.count == 1 ? urls[0].lastPathComponent : nil
@@ -476,9 +482,11 @@ final class ArchiveSession {
         let paths = nodes.map(\.path)
         let jobTitle = editTitle("Lösche")
         do {
-            _ = try await withPassword { pw in
-                try await ui.runJob(title: jobTitle, symbol: "trash") { relay in
-                    try deleteFromArchive(path: path, paths: paths, password: pw, progress: relay)
+            _ = try await modifying {
+                try await withPassword { pw in
+                    try await ui.runJob(title: jobTitle, symbol: "trash") { relay in
+                        try deleteFromArchive(path: path, paths: paths, password: pw, progress: relay)
+                    }
                 }
             }
             selection = []
@@ -495,9 +503,11 @@ final class ArchiveSession {
         let entry = node.path
         let title = editTitle("Benenne „\(node.name)“ um")
         do {
-            let newPath = try await withPassword { pw in
-                try await ui.runJob(title: title, symbol: "pencil") { relay in
-                    try renameInArchive(path: path, entry: entry, newName: newName, password: pw, progress: relay)
+            let newPath = try await modifying {
+                try await withPassword { pw in
+                    try await ui.runJob(title: title, symbol: "pencil") { relay in
+                        try renameInArchive(path: path, entry: entry, newName: newName, password: pw, progress: relay)
+                    }
                 }
             }
             await reload(selecting: newPath)
@@ -524,9 +534,11 @@ final class ArchiveSession {
         let inner = currentFolder?.path ?? ""
         let title = editTitle("Lege „\(name)“ an")
         do {
-            let newPath = try await withPassword { pw in
-                try await ui.runJob(title: title, symbol: "folder.badge.plus") { relay in
-                    try createFolderInArchive(path: path, innerDir: inner, name: name, password: pw, progress: relay)
+            let newPath = try await modifying {
+                try await withPassword { pw in
+                    try await ui.runJob(title: title, symbol: "folder.badge.plus") { relay in
+                        try createFolderInArchive(path: path, innerDir: inner, name: name, password: pw, progress: relay)
+                    }
                 }
             }
             await reload(selecting: newPath)
@@ -553,12 +565,7 @@ final class ArchiveSession {
             }
             ui.announceCreated(summary)
             if request.trashOriginals {
-                let volumes = archiveVolumes(path: url.path).map { URL(fileURLWithPath: $0) }
-                NSWorkspace.shared.recycle(volumes) { [ui] _, error in
-                    Task { @MainActor in
-                        if let error { ui.presentError(error) } else { ui.closeWindow?() }
-                    }
-                }
+                trashArchiveAndClose()
             }
         } catch {
             ui.presentError(error, title: "Konvertieren fehlgeschlagen")
@@ -568,7 +575,101 @@ final class ArchiveSession {
     // MARK: - Aufräumen
 
     func cleanup() {
+        stopWatching()
         for dir in tempDirectories { TempStore.remove(dir) }
         tempDirectories.removeAll()
+    }
+
+    /// Legt das Archiv (bei mehrteiligen alle Teile) in den Papierkorb und schließt das Fenster.
+    private func trashArchiveAndClose() {
+        // Das ist gewollt, kein Ereignis von außen
+        stopWatching()
+        let volumes = archiveVolumes(path: url.path).map { URL(fileURLWithPath: $0) }
+        NSWorkspace.shared.recycle(volumes) { [weak self, ui] _, error in
+            Task { @MainActor in
+                if let error {
+                    self?.startWatching()
+                    ui.presentError(error)
+                } else {
+                    ui.closeWindow?()
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Datei beobachten
+
+extension ArchiveSession {
+    /// Vom Archivfenster aufgerufen. Dienste (Finder-Kontextmenü) beobachten nicht.
+    func watchFile() {
+        watchesFile = true
+        startWatching()
+    }
+
+    private func startWatching(at location: URL? = nil) {
+        watcher?.cancel()
+        watcher = nil
+        guard watchesFile else { return }
+        watcher = FileWatcher(url: location ?? url) { [weak self] event in
+            self?.fileChanged(event)
+        }
+    }
+
+    private func stopWatching() {
+        watcher?.cancel()
+        watcher = nil
+    }
+
+    /// Während ZIPP das Archiv selbst ändert, nicht auf die eigenen Schreibvorgänge reagieren.
+    /// Danach wird neu aufgesetzt, denn beim Neuschreiben entsteht eine neue Datei.
+    func modifying<T>(_ work: () async throws -> T) async rethrows -> T {
+        ownWrites += 1
+        stopWatching()
+        defer {
+            ownWrites -= 1
+            if ownWrites == 0 { startWatching() }
+        }
+        return try await work()
+    }
+
+    private func fileChanged(_ event: FileWatcher.Event) {
+        watcher = nil
+        guard ownWrites == 0 else { return }
+        // Kurz warten: Programme, die sicher speichern, benennen erst um und legen dann neu an.
+        Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(400))
+            await self?.evaluate(event)
+        }
+    }
+
+    private func evaluate(_ event: FileWatcher.Event) async {
+        guard ownWrites == 0, watchesFile else { return }
+        let fm = FileManager.default
+
+        // Wieder (oder immer noch) am alten Ort: ersetzt, verändert oder zurückgelegt
+        if fm.fileExists(atPath: url.path) {
+            startWatching()
+            await load()
+            return
+        }
+
+        if case .moved(let destination?) = event, fm.fileExists(atPath: destination.path) {
+            if FileWatcher.isInTrash(destination) {
+                // Weiter beobachten: Wird es zurückgelegt, geht es hier weiter.
+                selection = []
+                phase = .missing(trashed: true)
+                startWatching(at: destination)
+            } else {
+                // Umbenannt oder verschoben: einfach mitgehen
+                url = destination
+                startWatching()
+                if case .missing = phase { await load() }
+            }
+            return
+        }
+
+        selection = []
+        phase = .missing(trashed: false)
     }
 }

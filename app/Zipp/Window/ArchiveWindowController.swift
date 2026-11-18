@@ -29,6 +29,10 @@ final class ArchiveWindowController: NSWindowController, NSWindowDelegate {
 
     var archiveURL: URL? { session?.url }
     var isBusy: Bool { ui.job != nil }
+    var isArchiveMissing: Bool {
+        if case .missing = session?.phase { return true }
+        return false
+    }
 
     private var splitController: MainSplitViewController? {
         window?.contentViewController as? MainSplitViewController
@@ -113,6 +117,7 @@ final class ArchiveWindowController: NSWindowController, NSWindowDelegate {
         RecentArchives.shared.add(url)
         updateToolbarVisibility()
         observeSession()
+        session.watchFile()
         Task { await session.load() }
     }
 
@@ -121,6 +126,7 @@ final class ArchiveWindowController: NSWindowController, NSWindowDelegate {
         guard let session else { return }
         withObservationTracking {
             _ = session.phase
+            _ = session.url
             _ = session.listing
             _ = session.selection
             _ = session.historyVersion
@@ -138,6 +144,11 @@ final class ArchiveWindowController: NSWindowController, NSWindowDelegate {
 
     private func updateChrome() {
         guard let session else { return }
+        // Im Finder umbenannt oder verschoben: Titel und Pfadmenü mitnehmen
+        if window?.representedURL != session.url {
+            window?.title = session.displayName
+            window?.representedURL = session.url
+        }
         switch session.phase {
         case .ready:
             if let listing = session.listing {
@@ -148,6 +159,7 @@ final class ArchiveWindowController: NSWindowController, NSWindowDelegate {
         case .loading: window?.subtitle = "Wird geladen …"
         case .locked: window?.subtitle = "Verschlüsselt"
         case .failed: window?.subtitle = "Fehler"
+        case .missing(let trashed): window?.subtitle = trashed ? "Im Papierkorb" : "Nicht mehr vorhanden"
         }
         if let field = searchItem?.searchField, field.stringValue != session.searchText {
             field.stringValue = session.searchText
@@ -528,7 +540,9 @@ extension ArchiveWindowController: NSMenuItemValidation, NSToolbarItemValidation
         case #selector(convertArchive(_:)): return ready && idle
         case #selector(toggleQuickLook(_:)):
             return ready && (session?.selection.contains { !$0.isDirectory } ?? false)
-        case #selector(revealArchive(_:)): return session != nil
+        case #selector(revealArchive(_:)):
+            if case .missing(trashed: false) = session?.phase { return false }
+            return session != nil
         case #selector(focusSearch(_:)): return ready
         case #selector(unlockArchive(_:)): return session != nil
         default: return true

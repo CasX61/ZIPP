@@ -122,6 +122,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Bei mehrteiligen Archiven immer den ersten Teil öffnen (auch wenn „.part3.rar“ angeklickt wurde)
         let url = ArchiveTypes.firstVolume(of: url)
         if let existing = controllers.first(where: { $0.archiveURL?.standardizedFileURL == url }) {
+            // Das Fenster zeigte „nicht mehr vorhanden“, jetzt gibt es die Datei wieder
+            if existing.isArchiveMissing { existing.load(url) }
             existing.showWindow(nil)
             return
         }

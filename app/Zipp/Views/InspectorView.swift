@@ -16,6 +16,8 @@ struct InspectorView: View {
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
+            // Kein Archiv lesbar (z. B. gelöscht): Knöpfe hier würden ins Leere greifen
+            .disabled(session.phase != .ready)
         }
         .frame(minWidth: 220)
     }
